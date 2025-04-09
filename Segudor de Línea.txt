@@ -1,0 +1,97 @@
+#include <AFMotor.h>
+#include <QTRSensors.h>
+
+AF_DCMotor motor1(1, MOTOR12_1KHZ);
+AF_DCMotor motor2(2, MOTOR12_1KHZ);
+
+#define KP 2
+#define KD 5
+#define M1_minumum_speed 150
+#define M2_minumum_speed 150
+#define M1_maksimum_speed 250
+#define M2_maksimum_speed 250
+#define NUM_SENSORS 5
+#define TIMEOUT 2500
+#define EMITTER_PIN 2
+#define DEBUG 1
+
+QTRSensorsRC qtrrc((unsigned char[]){A4, A3, A2, A1, A0}, NUM_SENSORS, TIMEOUT, EMITTER_PIN);
+unsigned int sensorValues[NUM_SENSORS];
+
+int lastError = 0;
+
+void setup() {
+  delay(1500);
+  manual_calibration();
+  set_motors(0, 0);
+
+  if (DEBUG) {
+    Serial.begin(9600);
+    Serial.println("Robot iniciado...");
+  }
+}
+
+void loop() {
+  qtrrc.read(sensorValues);
+
+  int izquierda = sensorValues[0] + sensorValues[1];
+  int centro    = sensorValues[2];
+  int derecha   = sensorValues[3] + sensorValues[4];
+
+  int error = derecha - izquierda;
+  int motorSpeed = KP * error + KD * (error - lastError);
+  lastError = error;
+
+  int velocidadBase = 200;
+  int leftMotorSpeed = velocidadBase + motorSpeed;
+  int rightMotorSpeed = velocidadBase - motorSpeed;
+
+  if (DEBUG) {
+    Serial.print("Izq: ");
+    Serial.print(izquierda);
+    Serial.print("  Centro: ");
+    Serial.print(centro);
+    Serial.print("  Der: ");
+    Serial.print(derecha);
+    Serial.print("  Error: ");
+    Serial.println(error);
+  }
+
+  set_motors(leftMotorSpeed, rightMotorSpeed);
+}
+
+void set_motors(int motor1speed, int motor2speed) {
+  if (motor1speed > M1_maksimum_speed) motor1speed = M1_maksimum_speed;
+  if (motor2speed > M2_maksimum_speed) motor2speed = M2_maksimum_speed;
+  if (motor1speed < 0) motor1speed = 0;
+  if (motor2speed < 0) motor2speed = 0;
+
+  motor1.setSpeed(motor1speed);
+  motor2.setSpeed(motor2speed);
+  motor1.run(FORWARD);
+  motor2.run(FORWARD);
+}
+
+void manual_calibration() {
+  for (int i = 0; i < 250; i++) {
+    qtrrc.calibrate(QTR_EMITTERS_ON);
+    delay(20);
+  }
+
+  if (DEBUG) {
+    Serial.println("Valores mínimos:");
+    for (int i = 0; i < NUM_SENSORS; i++) {
+      Serial.print(qtrrc.calibratedMinimumOn[i]);
+      Serial.print(' ');
+    }
+    Serial.println();
+
+    Serial.println("Valores máximos:");
+    for (int i = 0; i < NUM_SENSORS; i++) {
+      Serial.print(qtrrc.calibratedMaximumOn[i]);
+      Serial.print(' ');
+    }
+    Serial.println();
+    Serial.println("Calibración completa.");
+  }
+}
